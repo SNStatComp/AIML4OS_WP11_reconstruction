@@ -7,15 +7,18 @@ derive a network of enterprises.
 flowchart TD
 
 
-A[Enterprise Dataset<br>500k Enterprises + Features] --> B[Candidate Pair Generation]
+A[Enterprise Dataset<br>500k Enterprises + Features] --> B1
 
-B --> B1[Blocking Rules<br>Sector / Geography / Size]
+subgraph SG1[Candidate Pair Generation]
+
+B1[Blocking Rules<br>Sector / Geography / Size]
 %% B --> B2[ANN Search<br>Embeddings + FAISS/HNSW]
 
-B1 --> C[Candidate Edge Set<br>~10M–100M pairs]
+C2 --> C1[Candidate Edge Set<br>~100M pairs]
 
-C --> C1[Derive dyadic Features<br>From Enterprise Features]
+B1 --> C2[Derive dyadic Features<br>From Enterprise Features]
 %% B2 --> C
+end
 
 D[Load Link Prediction Model]
 C1 --> D
@@ -26,7 +29,7 @@ E --> H[Expected Degree Estimation]
 H --> H1[Expected Suppliers per Enterprise<br>k_in_i]
 H --> H2[Expected Users per Enterprise<br>k_out_j]
 
-H1 --> F[Probability Calibration <br> isotonic regression]
+H1 --> F[Probability Calibration]
 
 %% H --> F[Probability Calibration]
 
