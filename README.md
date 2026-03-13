@@ -3,7 +3,7 @@
 Given a set of enterprises, their properties, a link prediction function, 
 derive a network of enterprises.
 
-** WORK IN PROGRESS / IN HIGH FLUX **
+**WORK IN PROGRESS / IN HIGH FLUX**
 
 ```mermaid
 flowchart TD
