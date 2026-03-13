@@ -1,0 +1,13 @@
+[project]
+name = "aiml4os-wp11-reconstruction"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=1.5.0",
+    "ibis-framework>=12.0.0",
+    "lightgbm>=4.6.0",
+    "pandas>=3.0.1",
+    "scikit-learn>=1.6.1"
+]

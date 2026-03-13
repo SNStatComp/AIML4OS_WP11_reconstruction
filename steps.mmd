@@ -1,0 +1,60 @@
+flowchart TD
+
+D[Load Link Prediction Model]
+
+A[Enterprise Dataset<br>500k Enterprises + Features] --> B[Candidate Pair Generation]
+
+B --> B1[Blocking Rules<br>Sector / Geography / Size]
+%% B --> B2[ANN Search<br>Embeddings + FAISS/HNSW]
+
+B1 --> C[Candidate Edge Set<br>~10M–100M pairs]
+%% B2 --> C
+
+C --> D
+D --> E[Raw Link Probabilities<br>p_ij]
+
+E --> H[Expected Degree Estimation]
+
+H --> H1[Expected Suppliers per Enterprise<br>k_in_i]
+H --> H2[Expected Users per Enterprise<br>k_out_j]
+
+H1 --> F[Probability Calibration]
+
+%% H --> F[Probability Calibration]
+
+%% F --> F1[Platt Scaling]
+%% F --> F2[Calibration<br> _Beta Calibration_ ]
+%% F --> F3[Isotonic Regression]
+
+F --> G[Calibrated Probabilities]
+%% F1 --> G[Calibrated Probabilities]
+%% F2 --> G[Calibrated Probabilities]
+%% F3 --> G
+
+G --> J[Edge Sampling Procedure]
+
+
+%% I --> I1[Fitness Scaling<br>Enterprise Size / Revenue]
+%% I --> I2[Sector Block Matrix<br>Input-Output Constraints]
+%% I --> I3[Geographic Decay, from model]
+
+%% I1 --> J
+%% I2 --> J
+%% I3 --> J
+
+J --> J1[Supplier Sampling per Enterprise]
+%% J --> J2[Probabilistic Edge Sampling]
+
+J1 --> K[Construct Network]
+%% J2 --> K
+
+H1 --> L
+H2 --> L
+
+K --> L[Structural Constraints]
+
+L --> L1[Remove Impossible Sector Links]
+L --> L2[Limit Supplier / User Degree]
+L --> L3[Remove Reciprocal Loops]
+
+L1 --> M[Reconstructed Enterprise Network]
