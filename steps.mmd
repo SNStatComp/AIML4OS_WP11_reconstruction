@@ -1,64 +1,61 @@
 flowchart TD
 
+    A["📊 Input:<br>data-raw/data.parquet<br>data-raw/pairs.parquet"] --> S01
 
-A[Enterprise Dataset<br>500k Enterprises + Features] --> B1
+    subgraph GENERATION["Step 01: Candidate Generation"]
+        S01["Generate Candidates<br>(from pairs or probabilistic)"]
+    end
 
-subgraph SG1[Candidate Pair Generation]
+    S01 --> CAND["candidates.parquet"]
 
-B1[Blocking Rules<br>Sector / Geography / Size]
-%% B --> B2[ANN Search<br>Embeddings + FAISS/HNSW]
+    subgraph SCORING["Step 02: Score Candidates"]
+        S02["Load LightGBM Model<br>Predict Raw Probabilities"]
+    end
 
-C2 --> C1[Candidate Edge Set<br>~100M pairs]
+    CAND --> S02
+    S02 --> RAWPROB["raw_probabilities.parquet"]
 
-B1 --> C2[Derive dyadic Features<br>From Enterprise Features]
-%% B2 --> C
-end
+    subgraph DEGREE["Step 03: Expected Degree"]
+        S03["Estimate Expected Suppliers<br>(heuristic from TO/WAGES)"]
+    end
 
-D[Load Link Prediction Model]
-C1 --> D
-D --> E[Raw Link Probabilities<br>p_ij]
+    A --> S03
+    S03 --> EXPECTED["expected_suppliers.parquet"]
 
-E --> H[Expected Degree Estimation]
+    subgraph CALIB["Step 04: Calibration"]
+        S04["Scale Raw Probabilities<br>to Match Expected Degree"]
+    end
 
-H --> H1[Expected Suppliers per Enterprise<br>k_in_i]
-H --> H2[Expected Users per Enterprise<br>k_out_j]
+    RAWPROB --> S04
+    EXPECTED --> S04
+    S04 --> CALIBRATED["calibrated_probabilities.parquet"]
 
-H1 --> F[Probability Calibration]
+    subgraph RECONSTRUCT["Step 05: Reconstruct"]
+        S05A["Step 05a: Sample Edges<br>(probabilistic or top-k)"]
+        S05B["Step 05b: Prune Links<br>(degree + NACE exclusions)"]
+        S05A --> S05B
+    end
 
-%% H --> F[Probability Calibration]
+    CALIBRATED --> S05A
+    EXPECTED --> S05A
+    A --> S05B
+    S05B --> RECON["reconstructed_network.parquet"]
 
-%% F --> F1[Platt Scaling]
-%% F --> F2[Calibration<br> _Beta Calibration_ ]
-%% F --> F3[Isotonic Regression]
+    subgraph EVAL["Step 06: Evaluate"]
+        S06["Compute Metrics<br>(edges, degree fit, MAE/RMSE)"]
+    end
 
-F --> G[Calibrated Probabilities]
-%% F1 --> G[Calibrated Probabilities]
-%% F2 --> G[Calibrated Probabilities]
-%% F3 --> G
+    RECON --> S06
+    EXPECTED --> S06
+    S06 --> SUMMARY["evaluation_summary.json<br>evaluation_user_degree_fit.parquet"]
 
-G --> J[Edge Sampling Procedure]
+    SUMMARY --> M["✅ Output Network"]
 
-%% I --> I1[Fitness Scaling<br>Enterprise Size / Revenue]
-%% I --> I2[Sector Block Matrix<br>Input-Output Constraints]
-%% I --> I3[Geographic Decay, from model]
-
-%% I1 --> J
-%% I2 --> J
-%% I3 --> J
-
-J --> J1[Supplier Sampling per Enterprise]
-%% J --> J2[Probabilistic Edge Sampling]
-
-J1 --> K[Construct Network]
-%% J2 --> K
-
-H1 --> L
-H2 --> L
-
-K --> L[Structural Constraints]
-
-L --> L1[Remove Impossible Sector Links]
-L --> L2[Limit Supplier / User Degree]
-L --> L3[Remove Reciprocal Loops]
-
-L1 --> M[Reconstructed Enterprise Network]
+    style A fill:#e1f5ff
+    style M fill:#c8e6c9
+    style GENERATION fill:#fff3e0
+    style SCORING fill:#fff3e0
+    style DEGREE fill:#fff3e0
+    style CALIB fill:#fff3e0
+    style RECONSTRUCT fill:#fff3e0
+    style EVAL fill:#fff3e0

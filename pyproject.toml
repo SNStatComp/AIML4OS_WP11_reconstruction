@@ -14,5 +14,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "ipykernel>=7.3.0",
+    "matplotlib>=3.11.0",
+    "networkx>=3.6.1",
+    "seaborn>=0.13.2",
     "snakemake>=9.23.1",
 ]
