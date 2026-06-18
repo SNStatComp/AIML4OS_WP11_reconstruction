@@ -4,33 +4,42 @@ from pathlib import Path
 import argparse
 import json
 
+import ibis
 import numpy as np
 import pandas as pd
 
-from network_builder._io import read_parquet_df, write_parquet_df
+from network_builder.io import (
+	pandas_to_table,
+	read_parquet_table,
+	table_to_pandas,
+	write_parquet_table,
+)
 
 
 def evaluate_reconstruction(
-	reconstructed_edges: pd.DataFrame,
-	expected_suppliers: pd.DataFrame,
+	reconstructed_edges: ibis.Table,
+	expected_suppliers: ibis.Table,
 ) -> dict:
+	reconstructed_edges_df = table_to_pandas(reconstructed_edges)
+	expected_suppliers_df = table_to_pandas(expected_suppliers)
+
 	required_edges = ["user_id", "supplier_id"]
 	required_expected = ["user_id", "expected_num_suppliers"]
 
-	missing_edges = [c for c in required_edges if c not in reconstructed_edges.columns]
-	missing_expected = [c for c in required_expected if c not in expected_suppliers.columns]
+	missing_edges = [c for c in required_edges if c not in reconstructed_edges_df.columns]
+	missing_expected = [c for c in required_expected if c not in expected_suppliers_df.columns]
 	if missing_edges:
 		raise ValueError(f"Reconstructed edges missing columns: {missing_edges}")
 	if missing_expected:
 		raise ValueError(f"Expected suppliers missing columns: {missing_expected}")
 
-	edges = reconstructed_edges.copy()
+	edges = reconstructed_edges_df.copy()
 	edges = edges.drop_duplicates(["user_id", "supplier_id"])
 
 	user_degree = edges.groupby("user_id").size().rename("actual_num_suppliers").reset_index()
 	supplier_degree = edges.groupby("supplier_id").size().rename("actual_num_users").reset_index()
 
-	fit_df = expected_suppliers[["user_id", "expected_num_suppliers"]].merge(
+	fit_df = expected_suppliers_df[["user_id", "expected_num_suppliers"]].merge(
 		user_degree,
 		on="user_id",
 		how="left",
@@ -58,13 +67,16 @@ def run_step(
 	output_json_path: str | Path = "data/evaluation_summary.json",
 	output_user_fit_path: str | Path = "data/evaluation_user_degree_fit.parquet",
 ) -> dict:
-	reconstructed = read_parquet_df(reconstructed_path)
-	expected = read_parquet_df(expected_path)
+	reconstructed = read_parquet_table(reconstructed_path)
+	expected = read_parquet_table(expected_path)
+
+	reconstructed_df = table_to_pandas(reconstructed)
+	expected_df = table_to_pandas(expected)
 
 	summary = evaluate_reconstruction(reconstructed, expected)
 
-	fit_df = expected[["user_id", "expected_num_suppliers"]].merge(
-		reconstructed.groupby("user_id").size().rename("actual_num_suppliers").reset_index(),
+	fit_df = expected_df[["user_id", "expected_num_suppliers"]].merge(
+		reconstructed_df.groupby("user_id").size().rename("actual_num_suppliers").reset_index(),
 		on="user_id",
 		how="left",
 	)
@@ -74,7 +86,7 @@ def run_step(
 	output_json_path = Path(output_json_path)
 	output_json_path.parent.mkdir(parents=True, exist_ok=True)
 	output_json_path.write_text(json.dumps(summary, indent=2), encoding="utf-8")
-	write_parquet_df(fit_df, output_user_fit_path)
+	write_parquet_table(pandas_to_table(fit_df), output_user_fit_path)
 
 	return summary
 

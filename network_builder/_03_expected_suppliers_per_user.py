@@ -3,10 +3,16 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 
+import ibis
 import numpy as np
 import pandas as pd
 
-from network_builder.io import read_parquet_df, write_parquet_df
+from network_builder.io import (
+    pandas_to_table,
+    read_parquet_table,
+    table_to_pandas,
+    write_parquet_table,
+)
 
 
 def _safe_percentile(series: pd.Series) -> pd.Series:
@@ -16,20 +22,22 @@ def _safe_percentile(series: pd.Series) -> pd.Series:
 
 
 def estimate_expected_suppliers_per_user(
-    enterprises: pd.DataFrame,
+    enterprises: ibis.Table,
     max_expected_suppliers: int = 25,
-) -> pd.DataFrame:
+) -> ibis.Table:
     """
     Estimate expected number of suppliers per enterprise from size-like signals.
 
     Uses a stable heuristic based on within-sector turnover/wage percentiles.
     """
+    enterprises_df = table_to_pandas(enterprises)
+
     required = ["id", "NACE", "TO", "WAGES"]
-    missing = [c for c in required if c not in enterprises.columns]
+    missing = [c for c in required if c not in enterprises_df.columns]
     if missing:
         raise ValueError(f"Enterprise table is missing required columns: {missing}")
 
-    df = enterprises[required].copy()
+    df = enterprises_df[required].copy()
     df = df.rename(columns={"id": "user_id", "NACE": "sector"})
 
     df["TO"] = pd.to_numeric(df["TO"], errors="coerce").fillna(0.0)
@@ -46,20 +54,20 @@ def estimate_expected_suppliers_per_user(
     labels = ["S", "M", "L", "XL"]
     df["size_class"] = pd.cut(df["expected_num_suppliers"], bins=bins, labels=labels).astype(str)
 
-    return df[["user_id", "sector", "size_class", "expected_num_suppliers"]]
+    return pandas_to_table(df[["user_id", "sector", "size_class", "expected_num_suppliers"]])
 
 
 def run_step(
     enterprises_path: str | Path = "data-raw/data.parquet",
     output_path: str | Path = "data/expected_suppliers.parquet",
     max_expected_suppliers: int = 25,
-) -> pd.DataFrame:
-    enterprises = read_parquet_df(enterprises_path)
+) -> ibis.Table:
+    enterprises = read_parquet_table(enterprises_path)
     expected = estimate_expected_suppliers_per_user(
         enterprises,
         max_expected_suppliers=max_expected_suppliers,
     )
-    write_parquet_df(expected, output_path)
+    write_parquet_table(expected, output_path)
     return expected
 
 

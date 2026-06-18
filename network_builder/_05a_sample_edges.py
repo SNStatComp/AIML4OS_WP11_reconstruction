@@ -3,18 +3,24 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 
+import ibis
 import numpy as np
 import pandas as pd
 
-from network_builder.io import read_parquet_df, write_parquet_df
+from network_builder.io import (
+    pandas_to_table,
+    read_parquet_table,
+    table_to_pandas,
+    write_parquet_table,
+)
 
 
 def sample_edges(
-    calibrated_edges: pd.DataFrame,
-    expected_suppliers: pd.DataFrame,
+    calibrated_edges: ibis.Table,
+    expected_suppliers: ibis.Table,
     selection_mode: str = "probabilistic",
     random_state: int = 42,
-) -> pd.DataFrame:
+) -> ibis.Table:
     """
     Select candidate edges per user.
 
@@ -22,22 +28,25 @@ def sample_edges(
     - probabilistic: weighted sampling without replacement (default)
     - topk: deterministic selection of highest-probability suppliers
     """
+    calibrated_edges_df = table_to_pandas(calibrated_edges)
+    expected_suppliers_df = table_to_pandas(expected_suppliers)
+
     required_edges = ["user_id", "supplier_id", "calibrated_probability"]
     required_expected = ["user_id", "expected_num_suppliers"]
 
-    missing_edges = [c for c in required_edges if c not in calibrated_edges.columns]
-    missing_expected = [c for c in required_expected if c not in expected_suppliers.columns]
+    missing_edges = [c for c in required_edges if c not in calibrated_edges_df.columns]
+    missing_expected = [c for c in required_expected if c not in expected_suppliers_df.columns]
     if missing_edges:
         raise ValueError(f"Calibrated edge table missing columns: {missing_edges}")
     if missing_expected:
         raise ValueError(f"Expected supplier table missing columns: {missing_expected}")
 
-    edges = calibrated_edges[required_edges].copy()
+    edges = calibrated_edges_df[required_edges].copy()
     edges["calibrated_probability"] = pd.to_numeric(
         edges["calibrated_probability"], errors="coerce"
     ).fillna(0.0).clip(0.0, 1.0)
 
-    expected = expected_suppliers[required_expected].copy()
+    expected = expected_suppliers_df[required_expected].copy()
     expected["expected_num_suppliers"] = pd.to_numeric(
         expected["expected_num_suppliers"], errors="coerce"
     ).fillna(1.0).astype(int)
@@ -74,11 +83,12 @@ def sample_edges(
             sampled_parts.append(group.loc[chosen_idx, ["user_id", "supplier_id", "calibrated_probability"]])
 
     if not sampled_parts:
-        return pd.DataFrame(columns=["user_id", "supplier_id", "selection_probability"])
+        return pandas_to_table(pd.DataFrame(columns=["user_id", "supplier_id", "selection_probability"]))
 
     sampled = pd.concat(sampled_parts, ignore_index=True)
     sampled = sampled.rename(columns={"calibrated_probability": "selection_probability"})
-    return sampled.sort_values(["user_id", "selection_probability"], ascending=[True, False]).reset_index(drop=True)
+    result = sampled.sort_values(["user_id", "selection_probability"], ascending=[True, False]).reset_index(drop=True)
+    return pandas_to_table(result)
 
 
 def run_step(
@@ -87,16 +97,16 @@ def run_step(
     output_path: str | Path = "data/sampled_edges.parquet",
     selection_mode: str = "probabilistic",
     random_state: int = 42,
-) -> pd.DataFrame:
-    calibrated = read_parquet_df(calibrated_path)
-    expected = read_parquet_df(expected_path)
+) -> ibis.Table:
+    calibrated = read_parquet_table(calibrated_path)
+    expected = read_parquet_table(expected_path)
     sampled = sample_edges(
         calibrated,
         expected,
         selection_mode=selection_mode,
         random_state=random_state,
     )
-    write_parquet_df(sampled, output_path)
+    write_parquet_table(sampled, output_path)
     return sampled
 
 

@@ -3,11 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 
+import ibis
 import joblib
 import lightgbm as lgb
 import pandas as pd
 
-from network_builder.io import read_parquet_df, write_parquet_df
+from network_builder.io import (
+    pandas_to_table,
+    read_parquet_table,
+    table_to_pandas,
+    write_parquet_table,
+)
 
 
 DEFAULT_FEATURE_COLUMNS = ["diff_TO", "diff_NPE", "same_sector", "same_region", "diff_WAGES"]
@@ -25,9 +31,10 @@ def _get_feature_columns(model: lgb.LGBMClassifier) -> list[str]:
     return DEFAULT_FEATURE_COLUMNS
 
 
-def predict_raw_probabilities(candidates: pd.DataFrame, model: lgb.LGBMClassifier) -> pd.DataFrame:
+def predict_raw_probabilities(candidates: ibis.Table, model: lgb.LGBMClassifier) -> ibis.Table:
+    candidates_df = table_to_pandas(candidates)
     feature_columns = _get_feature_columns(model)
-    scored = candidates.copy()
+    scored = candidates_df.copy()
 
     for col in feature_columns:
         if col not in scored.columns:
@@ -37,18 +44,18 @@ def predict_raw_probabilities(candidates: pd.DataFrame, model: lgb.LGBMClassifie
     raw_probabilities = model.predict_proba(x)[:, 1]
     result = scored[["user_id", "supplier_id"]].copy()
     result["raw_probability"] = raw_probabilities
-    return result
+    return pandas_to_table(result)
 
 
 def run_step(
     candidates_path: str | Path = "data/candidates.parquet",
     output_path: str | Path = "data/raw_probabilities.parquet",
     model_path: str | Path = "models/model_LightGBM.pkl",
-) -> pd.DataFrame:
-    candidates = read_parquet_df(candidates_path)
+) -> ibis.Table:
+    candidates = read_parquet_table(candidates_path)
     model = load_lightgbm_model(model_path)
     raw_probs = predict_raw_probabilities(candidates, model)
-    write_parquet_df(raw_probs, output_path)
+    write_parquet_table(raw_probs, output_path)
     return raw_probs
 
 

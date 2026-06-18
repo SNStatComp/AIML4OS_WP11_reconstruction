@@ -3,18 +3,25 @@ from __future__ import annotations
 from pathlib import Path
 import argparse
 
+import ibis
 import numpy as np
 import pandas as pd
 
-from network_builder.io import read_parquet_df, write_parquet_df
+from network_builder.io import (
+    pandas_to_table,
+    read_parquet_table,
+    table_to_pandas,
+    write_parquet_table,
+)
 
 
 FEATURE_COLUMNS = ["diff_TO", "diff_NPE", "same_sector", "same_region", "diff_WAGES"]
 
 
-def derive_dyadic_properties(candidates: pd.DataFrame) -> pd.DataFrame:
+def derive_dyadic_properties(candidates: ibis.Table) -> ibis.Table:
     """Ensure model-required dyadic feature columns exist and are numerically typed."""
-    result = candidates.copy()
+    candidates_df = table_to_pandas(candidates)
+    result = candidates_df.copy()
     for col in FEATURE_COLUMNS:
         if col not in result.columns:
             result[col] = 0.0
@@ -25,10 +32,11 @@ def derive_dyadic_properties(candidates: pd.DataFrame) -> pd.DataFrame:
     for col in ["diff_TO", "diff_NPE", "diff_WAGES"]:
         result[col] = pd.to_numeric(result[col], errors="coerce").fillna(0.0)
 
-    return result
+    return pandas_to_table(result)
 
 
-def _standardize_pairs_schema(pairs: pd.DataFrame) -> pd.DataFrame:
+def _standardize_pairs_schema(pairs: ibis.Table) -> ibis.Table:
+    pairs_df = table_to_pandas(pairs)
     rename_map = {
         "id_suplier": "supplier_id",
         "id_supplier": "supplier_id",
@@ -38,13 +46,13 @@ def _standardize_pairs_schema(pairs: pd.DataFrame) -> pd.DataFrame:
         "NACE_same": "same_sector",
         "NUTS3_same": "same_region",
     }
-    standardized = pairs.rename(columns=rename_map)
-    return derive_dyadic_properties(standardized)
+    standardized = pairs_df.rename(columns=rename_map)
+    return derive_dyadic_properties(pandas_to_table(standardized))
 
 
-def generate_candidates_from_pairs(pairs: pd.DataFrame) -> pd.DataFrame:
+def generate_candidates_from_pairs(pairs: ibis.Table) -> ibis.Table:
     """Generate candidates from precomputed pair table in data-raw/pairs.parquet."""
-    candidates = _standardize_pairs_schema(pairs)
+    candidates = table_to_pandas(_standardize_pairs_schema(pairs))
 
     required = ["user_id", "supplier_id", *FEATURE_COLUMNS]
     missing = [c for c in required if c not in candidates.columns]
@@ -57,14 +65,14 @@ def generate_candidates_from_pairs(pairs: pd.DataFrame) -> pd.DataFrame:
     candidates["supplier_id"] = candidates["supplier_id"].astype(int)
     candidates = candidates[candidates["user_id"] != candidates["supplier_id"]]
     candidates = candidates.drop_duplicates(["user_id", "supplier_id"])
-    return candidates
+    return pandas_to_table(candidates)
 
 
 def generate_candidates_probabilistic(
-    enterprises: pd.DataFrame,
+    enterprises: ibis.Table,
     max_candidates_per_user: int = 30,
     random_state: int = 42,
-) -> pd.DataFrame:
+) -> ibis.Table:
     """
     Fallback candidate generator based on sector/region blocks.
 
@@ -73,15 +81,17 @@ def generate_candidates_probabilistic(
     """
     rng = np.random.default_rng(random_state)
 
+    enterprises_df = table_to_pandas(enterprises)
+
     required = ["id", "NACE", "NUTS3", "TO", "WAGES"]
-    missing = [c for c in required if c not in enterprises.columns]
+    missing = [c for c in required if c not in enterprises_df.columns]
     if missing:
         raise ValueError(f"Enterprise table is missing required columns: {missing}")
 
-    users = enterprises[required].rename(
+    users = enterprises_df[required].rename(
         columns={"id": "user_id", "NACE": "user_nace", "NUTS3": "user_nuts3", "TO": "user_to", "WAGES": "user_wages"}
     )
-    suppliers = enterprises[required].rename(
+    suppliers = enterprises_df[required].rename(
         columns={"id": "supplier_id", "NACE": "supplier_nace", "NUTS3": "supplier_nuts3", "TO": "supplier_to", "WAGES": "supplier_wages"}
     )
 
@@ -107,7 +117,7 @@ def generate_candidates_probabilistic(
         sampled.append(block)
 
     if not sampled:
-        return pd.DataFrame(columns=["user_id", "supplier_id", *FEATURE_COLUMNS])
+        return pandas_to_table(pd.DataFrame(columns=["user_id", "supplier_id", *FEATURE_COLUMNS]))
 
     candidates = pd.concat(sampled, ignore_index=True)
     candidates["diff_TO"] = candidates["user_to"] - candidates["supplier_to"]
@@ -115,7 +125,8 @@ def generate_candidates_probabilistic(
     candidates["same_sector"] = (candidates["user_nace"] == candidates["supplier_nace"]).astype(float)
     candidates["same_region"] = (candidates["user_nuts3"] == candidates["supplier_nuts3"]).astype(float)
     candidates["diff_WAGES"] = candidates["user_wages"] - candidates["supplier_wages"]
-    return candidates[["user_id", "supplier_id", *FEATURE_COLUMNS]].drop_duplicates(["user_id", "supplier_id"])
+    result = candidates[["user_id", "supplier_id", *FEATURE_COLUMNS]].drop_duplicates(["user_id", "supplier_id"])
+    return pandas_to_table(result)
 
 
 def run_step(
@@ -123,23 +134,23 @@ def run_step(
     output_path: str | Path = "data/candidates.parquet",
     max_candidates_per_user: int = 30,
     random_state: int = 42,
-) -> pd.DataFrame:
+) -> ibis.Table:
     data_raw_dir = Path(data_raw_dir)
     pairs_path = data_raw_dir / "pairs.parquet"
     enterprises_path = data_raw_dir / "data.parquet"
 
     if pairs_path.exists():
-        pairs = read_parquet_df(pairs_path)
+        pairs = read_parquet_table(pairs_path)
         candidates = generate_candidates_from_pairs(pairs)
     else:
-        enterprises = read_parquet_df(enterprises_path)
+        enterprises = read_parquet_table(enterprises_path)
         candidates = generate_candidates_probabilistic(
             enterprises,
             max_candidates_per_user=max_candidates_per_user,
             random_state=random_state,
         )
 
-    write_parquet_df(candidates, output_path)
+    write_parquet_table(candidates, output_path)
     return candidates
 
 
