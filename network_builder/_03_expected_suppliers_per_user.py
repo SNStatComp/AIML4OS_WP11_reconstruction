@@ -6,7 +6,7 @@ import argparse
 import numpy as np
 import pandas as pd
 
-from network_builder._io import read_parquet_df, write_parquet_df
+from network_builder.io import read_parquet_df, write_parquet_df
 
 
 def _safe_percentile(series: pd.Series) -> pd.Series:

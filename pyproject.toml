@@ -11,3 +11,8 @@ dependencies = [
     "pandas>=3.0.1",
     "scikit-learn>=1.6.1"
 ]
+
+[dependency-groups]
+dev = [
+    "snakemake>=9.23.1",
+]

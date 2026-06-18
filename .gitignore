@@ -1,0 +1,6 @@
+data
+data-raw
+.snakemake
+.venv
+models
+.vscode

@@ -7,7 +7,7 @@ import joblib
 import lightgbm as lgb
 import pandas as pd
 
-from network_builder._io import read_parquet_df, write_parquet_df
+from network_builder.io import read_parquet_df, write_parquet_df
 
 
 DEFAULT_FEATURE_COLUMNS = ["diff_TO", "diff_NPE", "same_sector", "same_region", "diff_WAGES"]
