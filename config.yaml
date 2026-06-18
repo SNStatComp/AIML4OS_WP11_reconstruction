@@ -1,0 +1,25 @@
+# Network reconstruction pipeline configuration
+# Override any value on the command line: snakemake --config key=value
+
+# Python executable (path to venv python)
+python: .venv/bin/python
+
+# Input/output directories
+data_raw_dir: data-raw
+data_dir: data
+
+# Model path
+model: models/model_LightGBM.pkl
+
+# Reconstruction mode: "probabilistic" or "topk"
+selection_mode: probabilistic
+
+# Optional NACE exclusion file (leave empty to disable)
+nace_exclusions: ""
+
+# Random seed for reproducibility
+random_state: 42
+
+# Degree constraints
+max_suppliers_per_user: 25
+max_users_per_supplier: 500

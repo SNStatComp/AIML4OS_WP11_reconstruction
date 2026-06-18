@@ -1,17 +1,65 @@
+from __future__ import annotations
+
+from pathlib import Path
+import argparse
+
 import joblib
 import lightgbm as lgb
-import ibis
+import pandas as pd
 
-def load_lightgbm_model() -> lgb.LGBMClassifier:
-    model = joblib.load("models/model_LightGBM.pkl", mmap_mode="r")
-    return model
+from network_builder._io import read_parquet_df, write_parquet_df
 
 
-def predict_raw_probabilities(candidates: ibis.Table, model: lgb.LGBMClassifier) -> ibis.Table:
-    # derive dyadic features for all enterprise-supplier pairs
-    # predict raw probabilities of link existence for all enterprise-supplier pairs
-    raw_probabilities = model.predict_proba(candidates)[:, 1]  # Assuming binary classification and we want the probability of the positive class
-    # combine with enterprise and supplier identifiers
-    results = candidates[['user_id', 'supplier_id']].copy()
-    results['raw_probability'] = raw_probabilities
-    return results
+DEFAULT_FEATURE_COLUMNS = ["diff_TO", "diff_NPE", "same_sector", "same_region", "diff_WAGES"]
+
+
+def load_lightgbm_model(model_path: str | Path = "models/model_LightGBM.pkl") -> lgb.LGBMClassifier:
+    return joblib.load(model_path, mmap_mode="r")
+
+
+def _get_feature_columns(model: lgb.LGBMClassifier) -> list[str]:
+    if hasattr(model, "feature_name_") and len(getattr(model, "feature_name_")) > 0:
+        return list(model.feature_name_)
+    if hasattr(model, "feature_names_in_") and len(getattr(model, "feature_names_in_")) > 0:
+        return list(model.feature_names_in_)
+    return DEFAULT_FEATURE_COLUMNS
+
+
+def predict_raw_probabilities(candidates: pd.DataFrame, model: lgb.LGBMClassifier) -> pd.DataFrame:
+    feature_columns = _get_feature_columns(model)
+    scored = candidates.copy()
+
+    for col in feature_columns:
+        if col not in scored.columns:
+            scored[col] = 0.0
+    x = scored[feature_columns].astype(float)
+
+    raw_probabilities = model.predict_proba(x)[:, 1]
+    result = scored[["user_id", "supplier_id"]].copy()
+    result["raw_probability"] = raw_probabilities
+    return result
+
+
+def run_step(
+    candidates_path: str | Path = "data/candidates.parquet",
+    output_path: str | Path = "data/raw_probabilities.parquet",
+    model_path: str | Path = "models/model_LightGBM.pkl",
+) -> pd.DataFrame:
+    candidates = read_parquet_df(candidates_path)
+    model = load_lightgbm_model(model_path)
+    raw_probs = predict_raw_probabilities(candidates, model)
+    write_parquet_df(raw_probs, output_path)
+    return raw_probs
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Step 02 - Predict raw edge probabilities.")
+    parser.add_argument("--candidates", default="data/candidates.parquet")
+    parser.add_argument("--output", default="data/raw_probabilities.parquet")
+    parser.add_argument("--model", default="models/model_LightGBM.pkl")
+    return parser.parse_args()
+
+
+if __name__ == "__main__":
+    args = _parse_args()
+    run_step(candidates_path=args.candidates, output_path=args.output, model_path=args.model)
