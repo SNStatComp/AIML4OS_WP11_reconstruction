@@ -4,9 +4,8 @@ import lightgbm as lgb
 import ibis
 
 def derive_dyadic_properties(users : ibis.Table, suppliers : ibis.Table) -> ibis.Table:
-    # derive dyadic properties for all enterprise-supplier pairs, based on the attributes of the enterprises and suppliers
-
     pass
+    # derive dyadic properties for all enterprise-supplier pairs, based on the attributes of the enterprises and suppliers
 
 def generate_candidates(users : ibis.Table, suppliers : ibis.Table) -> ibis.Table:
     pass
