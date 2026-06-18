@@ -1,6 +1,6 @@
 library(arrow)
 
-N <- 1000
+N <- 10000
 set.seed(1)
 df <- data.frame(
   id = 1:N,

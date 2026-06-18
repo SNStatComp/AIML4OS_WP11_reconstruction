@@ -79,7 +79,7 @@ Input data is read from `data-raw/`:
 Run end-to-end:
 
 ```bash
-/Users/edwin/Documents/cbs/AIML4OS_WP11_reconstruction/.venv/bin/python main.py
+python main.py
 ```
 
 ### Reconstruction Modes
@@ -93,10 +93,10 @@ Examples:
 
 ```bash
 # Default probabilistic mode
-/Users/edwin/Documents/cbs/AIML4OS_WP11_reconstruction/.venv/bin/python main.py --selection-mode probabilistic
+python main.py --selection-mode probabilistic
 
 # Deterministic baseline
-/Users/edwin/Documents/cbs/AIML4OS_WP11_reconstruction/.venv/bin/python main.py --selection-mode topk
+python main.py --selection-mode topk
 ```
 
 ### Optional NACE Exclusions
@@ -115,7 +115,7 @@ Expected columns:
 Run with exclusions:
 
 ```bash
-/Users/edwin/Documents/cbs/AIML4OS_WP11_reconstruction/.venv/bin/python main.py \
+python main.py \
 	--selection-mode probabilistic \
 	--nace-exclusions data-raw/nace_exclusions.csv
 ```

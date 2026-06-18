@@ -4,3 +4,4 @@ data-raw
 .venv
 models
 .vscode
+__pycache__
